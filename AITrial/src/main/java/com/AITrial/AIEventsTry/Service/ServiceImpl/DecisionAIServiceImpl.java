@@ -67,8 +67,9 @@ public class DecisionAIServiceImpl implements DecisionService {
 
         // Strong prompt for Groq
         String prompt = "User journey: " + sb.toString() +
-                ". Based on this sequence, predict conversion probability and next eventType. " +
-                "Return ONLY JSON with fields: probability, EventType,";
+               ". Predict next event type probability."+
+               "Allowed values EventType: Purchase, Browse, WishList, Abandon."+
+               "Return Only Json like:{\"probability\": 0.75,\"EventType\":\"Pruchase\"}";
 
         Map<String, Object> body = Map.of(
                 "model", "llama-3.1-8b-instant",
