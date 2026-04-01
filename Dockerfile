@@ -3,7 +3,9 @@ FROM maven:3.9.9-eclipse-temurin-17 AS build
 
 WORKDIR /app
 
+# Copy from AITrial folder
 COPY AITrial/pom.xml .
+
 RUN mvn dependency:go-offline
 
 COPY AITrial/src ./src
@@ -17,6 +19,6 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
 
-EXPOSE 8081
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
