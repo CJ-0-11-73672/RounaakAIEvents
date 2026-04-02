@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.AITrial.AIEventsTry.Entities.AIEntities;
 import com.AITrial.AIEventsTry.Entities.AIResponse;
 import com.AITrial.AIEventsTry.Service.DecisionService;
+import java.util.Map;
 @RequestMapping("/api/ai")
 @RestController
 public class AIController {
