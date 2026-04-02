@@ -6,8 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
-import java.util.*;
+import java.util.Map;
+import java.util.List;
+import java.util.Objects;
+import java.util.HashMap;
 
 @Service
 public class DecisionAIServiceImpl implements DecisionService {
@@ -154,6 +156,7 @@ if (lastOpenBrace != -1 && lastCloseBrace != -1 && lastCloseBrace > lastOpenBrac
 }
 
 System.out.println("Extracted FINAL JSON: " + json);
+
 // Parse AI output safely
 double probability = 0.5;
 String eventType = "web.webpagedetails.pageViews";
