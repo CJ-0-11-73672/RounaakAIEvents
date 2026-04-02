@@ -140,46 +140,52 @@ User journey:
         String aiText = (String) message.get("content");
 
         System.out.println("AI Raw Response: " + aiText);
-        aiText = aiText.trim();
-        if(aiText.startsWith("```")){
-            aiText = aiText.replaceAll("```json", "")
-                           .replaceAll("```", "")
-                   .trim();
-        }
-       int firstBrace = aiText.indexOf("{");
-       int lastBrace = aiText.indexOf("}");
+        
+// 🔥 Extract ONLY JSON (BEST METHOD)
+int start = aiText.indexOf("{");
+int end = aiText.lastIndexOf("}");
 
-       if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
-            aiText = aiText.substring(firstBrace, lastBrace + 1);
-        }
+String json = "{}";
 
-        System.out.println("Cleaned AI Response: " + aiText);
+if (start != -1 && end != -1 && end > start) {
+    json = aiText.substring(start, end + 1);
+} else {
+    System.out.println("Invalid JSON from AI, using fallback");
+}
+
+System.out.println("Extracted JSON: " + json);
 
 // Parse AI output safely
-       double probability = 0.5;
-       String eventType = "web.webpagedetails.pageViews";
+double probability = 0.5;
+String eventType = "web.webpagedetails.pageViews";
 
-       try {
-             Map<String, Object> aiResult =
-            mapper.readValue(aiText, Map.class);
+try {
+    Map<String, Object> aiResult =
+            mapper.readValue(json, Map.class);
 
-            if (aiResult.get("probability") != null) {
-                probability = Double.parseDouble(
-                        aiResult.get("probability").toString()
-                );
+    if (aiResult.get("probability") != null) {
+        probability = Double.parseDouble(
+                aiResult.get("probability").toString()
+        );
 
-                // clamp
-                if (probability < 0) probability = 0;
-                if (probability > 1) probability = 1;
-            }
+        // clamp
+        if (probability < 0) probability = 0;
+        if (probability > 1) probability = 1;
+    }
 
-            if (aiResult.get("eventType") != null) {
-                eventType = aiResult.get("eventType").toString();
-            }
+    Object eventObj = aiResult.get("eventType");
 
-        } catch (Exception e) {
-            System.out.println("Parsing failed, using fallback");
-        }
+    if (eventObj == null) {
+        eventObj = aiResult.get("EventType"); // fallback
+    }
+
+    if (eventObj != null) {
+        eventType = eventObj.toString();
+    }
+
+} catch (Exception e) {
+    System.out.println("Parsing failed, using fallback");
+}
 
         // Final response
         Map<String, Object> output = new HashMap<>();
