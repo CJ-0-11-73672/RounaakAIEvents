@@ -16,10 +16,10 @@ public class AIController {
     this.decisionService = decisionService;
   }
    @PostMapping("/decision")
-    public AIResponse getDecision(@RequestBody AIEntities request) {
+public Map<String, Object> getDecision(@RequestBody Map<String, Object> request) {
 
-        System.out.println("Incoming Request: " + request);
+    System.out.println("Incoming Request: " + request);
 
-        return decisionService.evaluate(request);
-    }
+    return decisionService.evaluate(request);
+}
 }
