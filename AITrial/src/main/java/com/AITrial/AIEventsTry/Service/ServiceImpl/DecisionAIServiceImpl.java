@@ -142,19 +142,18 @@ User journey:
         System.out.println("AI Raw Response: " + aiText);
         
 // 🔥 Extract ONLY JSON (BEST METHOD)
-int start = aiText.indexOf("{");
-int end = aiText.lastIndexOf("}");
+int lastOpenBrace = aiText.lastIndexOf("{");
+int lastCloseBrace = aiText.lastIndexOf("}");
 
 String json = "{}";
 
-if (start != -1 && end != -1 && end > start) {
-    json = aiText.substring(start, end + 1);
+if (lastOpenBrace != -1 && lastCloseBrace != -1 && lastCloseBrace > lastOpenBrace) {
+    json = aiText.substring(lastOpenBrace, lastCloseBrace + 1);
 } else {
     System.out.println("Invalid JSON from AI, using fallback");
 }
 
-System.out.println("Extracted JSON: " + json);
-
+System.out.println("Extracted FINAL JSON: " + json);
 // Parse AI output safely
 double probability = 0.5;
 String eventType = "web.webpagedetails.pageViews";
