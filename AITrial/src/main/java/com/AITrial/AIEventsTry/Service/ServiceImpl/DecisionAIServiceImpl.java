@@ -67,12 +67,16 @@ public class DecisionAIServiceImpl implements DecisionService {
 
         // Strong prompt for Groq
         String prompt = "User journey: " + sb.toString() +
-               ". Predict next event type probability."+
-               "Allowed values EventType: Purchase, Browse, WishList, Abandon."+
-               "Return Only Json like:{\"probability\": 0.75,\"EventType\":\"Pruchase\"}";
-
+                ". Predict the next event type and the probability (0.0 to 1.0) of achieving the highest-value event. " +
+                "Requirements: 1. Support any event schema provided in the journey (not limited to e-commerce). " +
+                "2. Match the input EventType format and casing exactly (e.g. WishList stays WishList). " +
+                "3. Ensure no mis-matching of events. " +
+                "4. Probability must be between 0.0 and 1.0. " +
+                "5. Return ONLY a JSON object with no extra explanation or text. " +
+                "Format: {\"probability\": 0.75, \"EventType\": \"PredictedEventName\"}";
         Map<String, Object> body = Map.of(
                 "model", "llama-3.1-8b-instant",
+                "temperature", 0.0, // Added to ensure strict adherence to the prompt
                 "messages", List.of(
                         Map.of(
                                 "role", "user",
@@ -80,9 +84,7 @@ public class DecisionAIServiceImpl implements DecisionService {
                         )
                 )
         );
-
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-
         ResponseEntity<Map> responseEntity = restTemplate.postForEntity(url, entity, Map.class);
         System.out.println("Status Code: "+responseEntity.getStatusCode());
         System.out.println("ResponseBody: "+responseEntity.getBody());
