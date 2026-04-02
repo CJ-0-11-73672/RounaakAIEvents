@@ -46,8 +46,7 @@ public class DecisionAIServiceImpl implements DecisionService {
         ObjectMapper mapper = new ObjectMapper();
 
         // Extract ATTRIBUTES (dynamic)
-        Map<String, Object> attributes =
-                (Map<String, Object>) request.get("attributes");
+        Map<String, Object> attributes = (Map<String, Object>) request.get("attributes");
 
         String attributesJson = "{}";
         try {
@@ -59,8 +58,7 @@ public class DecisionAIServiceImpl implements DecisionService {
         }
 
         // Extract EVENTS (dynamic)
-        List<Map<String, Object>> events =
-                (List<Map<String, Object>>) request.get("events");
+        List<Map<String, Object>> events = (List<Map<String, Object>>) request.get("events");
 
         StringBuilder sb = new StringBuilder();
 
@@ -73,47 +71,40 @@ public class DecisionAIServiceImpl implements DecisionService {
                 Map<String, Object> e = events.get(i);
 
                 String eventType = Objects.toString(e.getOrDefault("eventType", e.get("EventType")),
-        "Unknown");
+                        "Unknown");
                 String timestamp = Objects.toString(
-        e.getOrDefault("timestamp", e.get("Timestamp")),
-        ""
-);
+                        e.getOrDefault("timestamp", e.get("Timestamp")),
+                        "");
 
                 sb.append(eventType)
-                  .append(" at ")
-                  .append(timestamp)
-                  .append(", ");
+                        .append(" at ")
+                        .append(timestamp)
+                        .append(", ");
             }
         }
 
         String journey = sb.toString();
 
-        // Build STRONG prompt
-       String prompt = """
-You are a strict prediction API.
+        // prompt
+        String Userprompt = Objects.toString(request.get("prompt"), "");
+        String Systemprompt = """
+                You are a strict prediction API.
 
-Return ONLY valid JSON.
+                Return ONLY valid JSON.
+                Give probability for hieghtest event to be created
+                Format:
+                {
+                  "probability": number,
+                  "eventType": string
+                }
+                Rules:
+                - Do NOT explain
+                - Do NOT invent new event types
+                - eventType MUST be from the allowed list
+                - Output only JSON
 
-Format:
-{
-  "probability": number,
-  "eventType": string
-}
-
-Allowed eventType values:
-- Browse
-- Add To Cart
-- WishList
-- Purchase
-
-Rules:
-- Do NOT explain
-- Do NOT invent new event types
-- eventType MUST be from the allowed list
-- Output only JSON
-
-User journey:
-""" + journey;
+                User journey:
+                """ + journey;
 
         // Build request body
         Map<String, Object> body = Map.of(
@@ -122,25 +113,20 @@ User journey:
                 "messages", List.of(
                         Map.of(
                                 "role", "system",
-                                "content", "You are a strict JSON API. Return ONLY valid JSON."
-                        ),
+                                "content", Systemprompt),
                         Map.of(
                                 "role", "user",
-                                "content", prompt
-                        )
-                )
-        );
+                                "content", Userprompt)));
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<Map> responseEntity =
-                restTemplate.postForEntity(url, entity, Map.class);
+        ResponseEntity<Map> responseEntity = restTemplate.postForEntity(url, entity, Map.class);
 
         Map response = responseEntity.getBody();
         if (response == null || response.get("choices") == null) {
             System.out.println("Invalid AI response, using fallback");
             return fallbackResponse();
-           }
+        }
         // Extract AI response
         List choices = (List) response.get("choices");
         Map firstChoice = (Map) choices.get(0);
@@ -149,52 +135,52 @@ User journey:
         String aiText = (String) message.get("content");
 
         System.out.println("AI Raw Response: " + aiText);
-        
-// 🔥 Extract ONLY JSON (BEST METHOD)
-int lastOpenBrace = aiText.lastIndexOf("{");
-int lastCloseBrace = aiText.lastIndexOf("}");
 
-String json = "{}";
+        // Extract ONLY JSON
+        int lastOpenBrace = aiText.lastIndexOf("{");
+        int lastCloseBrace = aiText.lastIndexOf("}");
 
-if (lastOpenBrace != -1 && lastCloseBrace != -1 && lastCloseBrace > lastOpenBrace) {
-    json = aiText.substring(lastOpenBrace, lastCloseBrace + 1);
-} else {
-    System.out.println("Invalid JSON from AI, using fallback");
-}
+        String json = "{}";
 
-System.out.println("Extracted FINAL JSON: " + json);
+        if (lastOpenBrace != -1 && lastCloseBrace != -1 && lastCloseBrace > lastOpenBrace) {
+            json = aiText.substring(lastOpenBrace, lastCloseBrace + 1);
+        } else {
+            System.out.println("Invalid JSON from AI, using fallback");
+        }
 
-// Parse AI output safely
-double probability = 0.5;
-String eventType = "web.webpagedetails.pageViews";
+        System.out.println("Extracted FINAL JSON: " + json);
 
-try {
-    Map<String, Object> aiResult =
-            mapper.readValue(json, Map.class);
+        // Parse AI output safely
+        double probability = 0.5;
+        String eventType = "web.webpagedetails.pageViews";
 
-    if (aiResult.get("probability") != null) {
-        probability = Double.parseDouble(
-                aiResult.get("probability").toString()
-        );
+        try {
+            Map<String, Object> aiResult = mapper.readValue(json, Map.class);
 
-        // clamp
-        if (probability < 0) probability = 0;
-        if (probability > 1) probability = 1;
-    }
+            if (aiResult.get("probability") != null) {
+                probability = Double.parseDouble(
+                        aiResult.get("probability").toString());
 
-    Object eventObj = aiResult.get("eventType");
+                // clamp
+                if (probability < 0)
+                    probability = 0;
+                if (probability > 1)
+                    probability = 1;
+            }
 
-    if (eventObj == null) {
-        eventObj = aiResult.get("EventType"); // fallback
-    }
+            Object eventObj = aiResult.get("eventType");
 
-    if (eventObj != null) {
-        eventType = eventObj.toString();
-    }
+            if (eventObj == null) {
+                eventObj = aiResult.get("EventType"); // fallback
+            }
 
-} catch (Exception e) {
-    System.out.println("Parsing failed, using fallback");
-}
+            if (eventObj != null) {
+                eventType = eventObj.toString();
+            }
+
+        } catch (Exception e) {
+            System.out.println("Parsing failed, using fallback");
+        }
 
         // Final response
         Map<String, Object> output = new HashMap<>();
