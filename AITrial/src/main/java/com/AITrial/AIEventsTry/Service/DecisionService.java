@@ -5,5 +5,5 @@ import com.AITrial.AIEventsTry.Entities.AIEntities;
 import com.AITrial.AIEventsTry.Entities.AIResponse;
 
 public interface DecisionService {
-   AIResponse evaluate(AIEntities request);
+  Map<String, Object> evaluate(Map<String, Object> request);
 }
