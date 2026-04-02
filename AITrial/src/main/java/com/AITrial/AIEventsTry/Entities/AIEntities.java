@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AIEntities {
-   private String Id;
+   private Map<String, Object> Attributes;
    private List<Events> events;
    
 }
