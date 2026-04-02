@@ -4,6 +4,6 @@ import lombok.Data;
 
 @Data
 public class Events {
- private String EventType;
+ private String eventType;
  private String Timestamp;
 }
