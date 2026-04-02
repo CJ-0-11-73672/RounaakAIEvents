@@ -70,8 +70,12 @@ public class DecisionAIServiceImpl implements DecisionService {
 
                 Map<String, Object> e = events.get(i);
 
-                String eventType = Objects.toString(e.get("EventType"), "Unknown");
-                String timestamp = Objects.toString(e.get("Timestamp"), "");
+                String eventType = Objects.toString(e.getOrDefault("eventType", e.get("EventType")),
+        "Unknown");
+                String timestamp = Objects.toString(
+        e.getOrDefault("timestamp", e.get("Timestamp")),
+        ""
+);
 
                 sb.append(eventType)
                   .append(" at ")
@@ -84,26 +88,23 @@ public class DecisionAIServiceImpl implements DecisionService {
 
         // Build STRONG prompt
         String prompt = """
-                Return ONLY valid JSON.
+Return ONLY valid JSON.
 
-                Format:
-                {
-                  "probability": number,
-                  "eventType": string
-                }
+STRICT FORMAT:
+{
+  "probability": number,
+  "eventType": string
+}
 
-                Rules:
-                - probability must be between 0 and 1
-                - eventType must match input format exactly
-                - do not explain
-                - do not return markdown
-                - do not return array
+Rules:
+- Do NOT explain
+- Do NOT include markdown
+- Do NOT include multiple JSON objects
+- Do NOT include comments
+- Output must be a single JSON object only
 
-                User attributes:
-                """ + attributesJson + """
-
-                User journey:
-                """ + journey;
+User journey:
+""" + journey;
 
         // Build request body
         Map<String, Object> body = Map.of(
@@ -127,7 +128,10 @@ public class DecisionAIServiceImpl implements DecisionService {
                 restTemplate.postForEntity(url, entity, Map.class);
 
         Map response = responseEntity.getBody();
-
+        if (response == null || response.get("choices") == null) {
+            System.out.println("Invalid AI response, using fallback");
+            return fallbackResponse();
+           }
         // Extract AI response
         List choices = (List) response.get("choices");
         Map firstChoice = (Map) choices.get(0);
@@ -136,14 +140,28 @@ public class DecisionAIServiceImpl implements DecisionService {
         String aiText = (String) message.get("content");
 
         System.out.println("AI Raw Response: " + aiText);
+        aiText = aiText.trim();
+        if(aiText.startsWith("```")){
+            aiText = aiText.replaceAll("```json", "")
+                           .replaceAll("```", "")
+                   .trim();
+        }
+       int firstBrace = aiText.indexOf("{");
+       int lastBrace = aiText.indexOf("}");
 
-        // Parse AI output safely
-        double probability = 0.5;
-        String eventType = "web.webpagedetails.pageViews";
+       if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            aiText = aiText.substring(firstBrace, lastBrace + 1);
+        }
 
-        try {
-            Map<String, Object> aiResult =
-                    mapper.readValue(aiText, Map.class);
+        System.out.println("Cleaned AI Response: " + aiText);
+
+// Parse AI output safely
+       double probability = 0.5;
+       String eventType = "web.webpagedetails.pageViews";
+
+       try {
+             Map<String, Object> aiResult =
+            mapper.readValue(aiText, Map.class);
 
             if (aiResult.get("probability") != null) {
                 probability = Double.parseDouble(
