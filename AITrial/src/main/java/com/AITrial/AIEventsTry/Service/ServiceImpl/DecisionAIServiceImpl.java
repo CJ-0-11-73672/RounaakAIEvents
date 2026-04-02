@@ -1,21 +1,13 @@
 package com.AITrial.AIEventsTry.Service.ServiceImpl;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.client.RestTemplate;
-import java.util.*;
-
-import com.AITrial.AIEventsTry.Entities.AIEntities;
-import com.AITrial.AIEventsTry.Entities.AIResponse;
-import com.AITrial.AIEventsTry.Entities.Events;
-import com.AITrial.AIEventsTry.Entities.Events;
 import com.AITrial.AIEventsTry.Service.DecisionService;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.*;
 
 @Service
 public class DecisionAIServiceImpl implements DecisionService {
@@ -30,86 +22,162 @@ public class DecisionAIServiceImpl implements DecisionService {
     }
 
     @Override
-    public AIResponse evaluate(AIEntities request) {
+    public Map<String, Object> evaluate(Map<String, Object> request) {
 
         try {
             return callAI(request);
         } catch (Exception e) {
             System.out.println("AI call failed: " + e.getMessage());
-            return fallbackResponse(request);
+            return fallbackResponse();
         }
     }
 
     // MAIN AI CALL
-    private AIResponse callAI(AIEntities request) {
-        System.out.println("Calling Groq AI");
-        System.out.println("API Key: "+ groqApiKey);
+    private Map<String, Object> callAI(Map<String, Object> request) {
+
         String url = "https://api.groq.com/openai/v1/chat/completions";
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + groqApiKey);
+        headers.setBearerAuth(groqApiKey);
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // Build event sequence string
-        StringBuilder sb = new StringBuilder();
-    if(request.getEvents() != null){
-        for (Events e : request.getEvents()) {
-            sb.append(e.getEventType())
-              .append(" at ")
-              .append(e.getTimestamp())
-              .append(", ");
-        }
-    }
-    else{
-        System.out.println("No events recieved");
-    }
-        
+        ObjectMapper mapper = new ObjectMapper();
 
-        // Strong prompt for Groq
-        String prompt = "User journey: " + sb.toString() +
-                ". Predict the next event type and the probability (0.0 to 1.0) of achieving the highest-value event. " +
-                "Requirements: 1. Support any event schema provided in the journey (not limited to e-commerce). " +
-                "2. Match the input EventType format and casing exactly (e.g. WishList stays WishList). " +
-                "3. Ensure no mis-matching of events. " +
-                "4. Probability must be between 0.0 and 1.0. " +
-                "5. Return ONLY a JSON object with no extra explanation or text. " +
-                "Format: {\"probability\": 0.75, \"EventType\": \"PredictedEventName\"}";
+        // Extract ATTRIBUTES (dynamic)
+        Map<String, Object> attributes =
+                (Map<String, Object>) request.get("attributes");
+
+        String attributesJson = "{}";
+        try {
+            if (attributes != null) {
+                attributesJson = mapper.writeValueAsString(attributes);
+            }
+        } catch (Exception e) {
+            System.out.println("Attribute parsing failed");
+        }
+
+        // Extract EVENTS (dynamic)
+        List<Map<String, Object>> events =
+                (List<Map<String, Object>>) request.get("events");
+
+        StringBuilder sb = new StringBuilder();
+
+        if (events != null && !events.isEmpty()) {
+
+            int start = Math.max(0, events.size() - 5); // last 5 events
+
+            for (int i = start; i < events.size(); i++) {
+
+                Map<String, Object> e = events.get(i);
+
+                String eventType = Objects.toString(e.get("EventType"), "Unknown");
+                String timestamp = Objects.toString(e.get("Timestamp"), "");
+
+                sb.append(eventType)
+                  .append(" at ")
+                  .append(timestamp)
+                  .append(", ");
+            }
+        }
+
+        String journey = sb.toString();
+
+        // Build STRONG prompt
+        String prompt = """
+                Return ONLY valid JSON.
+
+                Format:
+                {
+                  "probability": number,
+                  "eventType": string
+                }
+
+                Rules:
+                - probability must be between 0 and 1
+                - eventType must match input format exactly
+                - do not explain
+                - do not return markdown
+                - do not return array
+
+                User attributes:
+                """ + attributesJson + """
+
+                User journey:
+                """ + journey;
+
+        // Build request body
         Map<String, Object> body = Map.of(
                 "model", "llama-3.1-8b-instant",
-                "temperature", 0.0, // Added to ensure strict adherence to the prompt
+                "temperature", 0.0,
                 "messages", List.of(
+                        Map.of(
+                                "role", "system",
+                                "content", "You are a strict JSON API. Return ONLY valid JSON."
+                        ),
                         Map.of(
                                 "role", "user",
                                 "content", prompt
                         )
                 )
         );
+
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-        ResponseEntity<Map> responseEntity = restTemplate.postForEntity(url, entity, Map.class);
-        System.out.println("Status Code: "+responseEntity.getStatusCode());
-        System.out.println("ResponseBody: "+responseEntity.getBody());
+
+        ResponseEntity<Map> responseEntity =
+                restTemplate.postForEntity(url, entity, Map.class);
+
         Map response = responseEntity.getBody();
+
+        // Extract AI response
         List choices = (List) response.get("choices");
         Map firstChoice = (Map) choices.get(0);
         Map message = (Map) firstChoice.get("message");
 
         String aiText = (String) message.get("content");
 
-        System.out.println("Groq Response: " + aiText);
+        System.out.println("AI Raw Response: " + aiText);
 
-        //  For now, return raw response in reason
-        return AIResponse.builder()
-                .probability(0.5) // placeholder
-                .EventType(aiText)
-                .build();
+        // Parse AI output safely
+        double probability = 0.5;
+        String eventType = "web.webpagedetails.pageViews";
+
+        try {
+            Map<String, Object> aiResult =
+                    mapper.readValue(aiText, Map.class);
+
+            if (aiResult.get("probability") != null) {
+                probability = Double.parseDouble(
+                        aiResult.get("probability").toString()
+                );
+
+                // clamp
+                if (probability < 0) probability = 0;
+                if (probability > 1) probability = 1;
+            }
+
+            if (aiResult.get("eventType") != null) {
+                eventType = aiResult.get("eventType").toString();
+            }
+
+        } catch (Exception e) {
+            System.out.println("Parsing failed, using fallback");
+        }
+
+        // Final response
+        Map<String, Object> output = new HashMap<>();
+        output.put("probability", probability);
+        output.put("eventType", eventType);
+
+        return output;
     }
 
-    // FALLBACK (IMPORTANT)
-    private AIResponse fallbackResponse(AIEntities request) {
+    // FALLBACK
+    private Map<String, Object> fallbackResponse() {
 
-        return AIResponse.builder()
-                .probability(0.5)
-                .EventType(null)
-                .build();
+        Map<String, Object> fallback = new HashMap<>();
+        fallback.put("probability", 0.5);
+        fallback.put("eventType", "web.webpagedetails.pageViews");
+
+        return fallback;
     }
 }
