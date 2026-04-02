@@ -89,21 +89,28 @@ public class DecisionAIServiceImpl implements DecisionService {
         String journey = sb.toString();
 
         // Build STRONG prompt
-        String prompt = """
+       String prompt = """
+You are a strict prediction API.
+
 Return ONLY valid JSON.
 
-STRICT FORMAT:
+Format:
 {
   "probability": number,
   "eventType": string
 }
 
+Allowed eventType values:
+- Browse
+- Add To Cart
+- WishList
+- Purchase
+
 Rules:
 - Do NOT explain
-- Do NOT include markdown
-- Do NOT include multiple JSON objects
-- Do NOT include comments
-- Output must be a single JSON object only
+- Do NOT invent new event types
+- eventType MUST be from the allowed list
+- Output only JSON
 
 User journey:
 """ + journey;
