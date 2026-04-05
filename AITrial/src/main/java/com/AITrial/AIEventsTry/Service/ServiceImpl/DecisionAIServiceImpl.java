@@ -4,11 +4,13 @@ import com.AITrial.AIEventsTry.Service.DecisionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.HashMap;
 
 @Service
@@ -22,15 +24,17 @@ public class DecisionAIServiceImpl implements DecisionService {
     public DecisionAIServiceImpl(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
-
+    @Async("taskExecutor")
     @Override
-    public Map<String, Object> evaluate(Map<String, Object> request) {
+    public CompletableFuture<Map<String, Object>> evaluateAsync(Map<String, Object> request) {
 
         try {
-            return callAI(request);
+            Map<String, Object> result = callAI(request);
+            return CompletableFuture.completedFuture(result);
+
         } catch (Exception e) {
             System.out.println("AI call failed: " + e.getMessage());
-            return fallbackResponse();
+            return CompletableFuture.completedFuture(fallbackResponse());
         }
     }
 
